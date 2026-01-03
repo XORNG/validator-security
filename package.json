@@ -5,15 +5,15 @@
   "type": "module",
   "main": "dist/index.js",
   "scripts": {
-    "build": "npx tsc",
+    "build": "tsc",
     "start": "node dist/index.js",
     "dev": "tsx watch src/index.ts",
     "lint": "eslint src/",
     "test": "vitest"
   },
   "dependencies": {
-    "@xorng/template-validator": "workspace:*",
-    "@xorng/template-base": "workspace:*",
+    "@xorng/template-validator": "file:../template-validator",
+    "@xorng/template-base": "file:../template-base",
     "@modelcontextprotocol/sdk": "^1.0.0",
     "pino": "^8.17.2",
     "zod": "^3.22.4"

@@ -1,11 +1,11 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import {
-  createValidatorServer,
   filterBySeverity,
-  toSarif,
   groupByFile,
   type Finding,
+  type ValidationInput,
+  type AnalyzerContext,
 } from '@xorng/template-validator';
 import { createLogger, registerTools, createToolHandler } from '@xorng/template-base';
 import { z } from 'zod';
@@ -29,9 +29,6 @@ const analyzers = {
 const server = new McpServer({
   name: 'validator-security',
   version: '0.1.0',
-  capabilities: {
-    tools: {},
-  },
 });
 
 const transport = new StdioServerTransport();
@@ -42,9 +39,15 @@ async function analyzeCode(
   filePath: string,
   options?: { analyzers?: string[] }
 ): Promise<Finding[]> {
-  const context = {
-    filePath,
+  const input: ValidationInput = {
+    content: code,
+    filename: filePath,
     language: detectLanguage(filePath),
+  };
+
+  const context: AnalyzerContext = {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    logger: logger as any,
     requestId: crypto.randomUUID(),
   };
 
@@ -54,8 +57,8 @@ async function analyzeCode(
   for (const name of selectedAnalyzers) {
     const analyzer = analyzers[name as keyof typeof analyzers];
     if (analyzer) {
-      const result = await analyzer.analyze(code, context);
-      findings.push(...result);
+      const result = await analyzer.analyze(input, context);
+      findings.push(...result.findings);
     }
   }
 
@@ -101,10 +104,10 @@ const tools = [
         findings,
         summary: {
           total: findings.length,
-          critical: filterBySeverity(findings, 'critical').length,
-          high: filterBySeverity(findings, 'high').length,
-          medium: filterBySeverity(findings, 'medium').length,
-          low: filterBySeverity(findings, 'low').length,
+          critical: findings.filter(f => f.severity === 'critical').length,
+          high: findings.filter(f => f.severity === 'high').length,
+          medium: findings.filter(f => f.severity === 'medium').length,
+          low: findings.filter(f => f.severity === 'low').length,
         },
       };
     },
@@ -142,7 +145,7 @@ const tools = [
       filePath: z.string().optional().default('package.json'),
     }),
     handler: async (input) => {
-      return analyzeCode(input.packageJson, input.filePath, { analyzers: ['dependencies'] });
+      return analyzeCode(input.packageJson, input.filePath || 'package.json', { analyzers: ['dependencies'] });
     },
   }),
 
@@ -163,37 +166,37 @@ const tools = [
     description: 'Generate a security report from scan findings',
     inputSchema: z.object({
       findings: z.array(z.any()).describe('Array of findings from scan'),
-      format: z.enum(['summary', 'detailed', 'sarif']).default('summary'),
+      format: z.enum(['summary', 'detailed']).default('summary'),
     }),
     handler: async (input) => {
       const findings = input.findings as Finding[];
-
-      if (input.format === 'sarif') {
-        return toSarif(findings, 'validator-security', '0.1.0');
-      }
-
       const grouped = groupByFile(findings);
       
       if (input.format === 'detailed') {
+        const groupedObj: Record<string, Finding[]> = {};
+        grouped.forEach((value, key) => {
+          groupedObj[key] = value;
+        });
+        
         return {
-          byFile: grouped,
+          byFile: groupedObj,
           summary: {
             total: findings.length,
-            critical: filterBySeverity(findings, 'critical').length,
-            high: filterBySeverity(findings, 'high').length,
-            medium: filterBySeverity(findings, 'medium').length,
-            low: filterBySeverity(findings, 'low').length,
+            critical: findings.filter(f => f.severity === 'critical').length,
+            high: findings.filter(f => f.severity === 'high').length,
+            medium: findings.filter(f => f.severity === 'medium').length,
+            low: findings.filter(f => f.severity === 'low').length,
           },
         };
       }
 
       return {
-        fileCount: Object.keys(grouped).length,
+        fileCount: grouped.size,
         findingCount: findings.length,
-        critical: filterBySeverity(findings, 'critical').length,
-        high: filterBySeverity(findings, 'high').length,
-        medium: filterBySeverity(findings, 'medium').length,
-        low: filterBySeverity(findings, 'low').length,
+        critical: findings.filter(f => f.severity === 'critical').length,
+        high: findings.filter(f => f.severity === 'high').length,
+        medium: findings.filter(f => f.severity === 'medium').length,
+        low: findings.filter(f => f.severity === 'low').length,
         topIssues: findings
           .filter(f => f.severity === 'critical' || f.severity === 'high')
           .slice(0, 5)

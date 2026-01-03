@@ -1,24 +1,16 @@
 import {
   BaseAnalyzer,
   type AnalyzerContext,
+  type AnalyzerResult,
   type Finding,
+  type ValidationInput,
+  type Severity,
 } from '@xorng/template-validator';
-
-/**
- * Dependency vulnerability interface
- */
-interface DependencyVuln {
-  name: string;
-  version: string;
-  vulnerability: string;
-  severity: Finding['severity'];
-  recommendation: string;
-}
 
 /**
  * Known vulnerable packages (in production, this would be fetched from a database)
  */
-const KNOWN_VULNERABILITIES: Record<string, { minSafe: string; vuln: string; severity: Finding['severity'] }> = {
+const KNOWN_VULNERABILITIES: Record<string, { minSafe: string; vuln: string; severity: Severity }> = {
   'lodash': { minSafe: '4.17.21', vuln: 'Prototype pollution vulnerability', severity: 'high' },
   'axios': { minSafe: '1.6.0', vuln: 'SSRF and CSRF vulnerabilities in older versions', severity: 'high' },
   'express': { minSafe: '4.18.2', vuln: 'Open redirect vulnerability in older versions', severity: 'medium' },
@@ -36,19 +28,26 @@ const KNOWN_VULNERABILITIES: Record<string, { minSafe: string; vuln: string; sev
  * Dependency analyzer for security vulnerabilities
  */
 export class DependencyAnalyzer extends BaseAnalyzer {
-  readonly name = 'dependencies';
-  readonly description = 'Analyzes dependencies for known vulnerabilities';
+  constructor() {
+    super(
+      'dependencies',
+      'Analyzes dependencies for known vulnerabilities',
+      'security',
+      'high'
+    );
+  }
 
-  async analyze(code: string, context: AnalyzerContext): Promise<Finding[]> {
+  async analyze(input: ValidationInput, context: AnalyzerContext): Promise<AnalyzerResult> {
     const findings: Finding[] = [];
+    const filename = input.filename || '';
 
     // Only analyze package.json files
-    if (!context.filePath.endsWith('package.json')) {
-      return findings;
+    if (!filename.endsWith('package.json')) {
+      return { findings };
     }
 
     try {
-      const packageJson = JSON.parse(code);
+      const packageJson = JSON.parse(input.content);
       const allDeps = {
         ...packageJson.dependencies,
         ...packageJson.devDependencies,
@@ -63,28 +62,29 @@ export class DependencyAnalyzer extends BaseAnalyzer {
         const minSafe = this.parseVersion(vuln.minSafe);
 
         if (this.isVulnerable(version, minSafe)) {
-          findings.push({
-            id: crypto.randomUUID(),
-            type: 'security',
-            severity: vuln.severity,
-            message: `Vulnerable dependency: ${name}@${version}`,
-            file: context.filePath,
-            line: this.findLineNumber(code, name),
-            suggestion: `Update ${name} to version ${vuln.minSafe} or higher: ${vuln.vuln}`,
-            rule: 'vulnerable-dependency',
-            metadata: {
-              package: name,
-              currentVersion: version,
-              minSafeVersion: vuln.minSafe,
-            },
-          });
+          findings.push(this.createFinding(
+            'vulnerable-dependency',
+            `Vulnerable dependency: ${name}@${version}`,
+            {
+              severity: vuln.severity,
+              file: filename,
+              line: this.findLineNumber(input.content, name),
+              suggestion: `Update ${name} to version ${vuln.minSafe} or higher: ${vuln.vuln}`,
+              type: 'security',
+              metadata: {
+                package: name,
+                currentVersion: version,
+                minSafeVersion: vuln.minSafe,
+              },
+            }
+          ));
         }
       }
-    } catch (error) {
+    } catch {
       // Not valid JSON, skip
     }
 
-    return findings;
+    return { findings };
   }
 
   private parseVersion(versionRange: string): string {
@@ -102,12 +102,11 @@ export class DependencyAnalyzer extends BaseAnalyzer {
       if (curr < safe) return true;
       if (curr > safe) return false;
     }
-
     return false;
   }
 
-  private findLineNumber(code: string, packageName: string): number {
-    const lines = code.split('\n');
+  private findLineNumber(content: string, packageName: string): number {
+    const lines = content.split('\n');
     for (let i = 0; i < lines.length; i++) {
       if (lines[i].includes(`"${packageName}"`)) {
         return i + 1;

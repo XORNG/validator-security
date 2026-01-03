@@ -1,11 +1,13 @@
 import {
   BaseAnalyzer,
   type AnalyzerContext,
+  type AnalyzerResult,
   type Finding,
+  type ValidationInput,
 } from '@xorng/template-validator';
 
 /**
- * Sensitive data patterns
+ * Sensitive pattern interface
  */
 interface SensitivePattern {
   name: string;
@@ -17,45 +19,59 @@ interface SensitivePattern {
  * Patterns for detecting secrets
  */
 const SECRET_PATTERNS: SensitivePattern[] = [
-  // API Keys
   {
     name: 'aws-access-key',
-    pattern: /AKIA[0-9A-Z]{16}/g,
-    message: 'AWS Access Key ID detected',
+    pattern: /(?:AKIA|A3T|AGPA|AIDA|AROA|AIPA|ANPA|ANVA|ASIA)[0-9A-Z]{16}/g,
+    message: 'Potential AWS Access Key ID detected',
   },
   {
     name: 'aws-secret-key',
-    pattern: /(?:aws)?_?(?:secret)?_?(?:access)?_?key\s*[:=]\s*["'][A-Za-z0-9/+=]{40}["']/gi,
-    message: 'AWS Secret Access Key detected',
+    pattern: /(?:aws)?[_-]?(?:secret)?[_-]?(?:access)?[_-]?key['"]*\s*[:=]\s*['"]\s*[A-Za-z0-9/+=]{40}/gi,
+    message: 'Potential AWS Secret Access Key detected',
   },
   {
     name: 'github-token',
-    pattern: /(?:ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9_]{36,}/g,
-    message: 'GitHub token detected',
+    pattern: /ghp_[A-Za-z0-9]{36}|github_pat_[A-Za-z0-9]{22}_[A-Za-z0-9]{59}/g,
+    message: 'Potential GitHub personal access token detected',
   },
   {
-    name: 'npm-token',
-    pattern: /npm_[A-Za-z0-9]{36}/g,
-    message: 'NPM token detected',
+    name: 'generic-api-key',
+    pattern: /['"]?(?:api[_-]?key|apikey|api_secret)['"]*\s*[:=]\s*['"][A-Za-z0-9_\-]{20,}['"]/gi,
+    message: 'Potential API key detected',
   },
   {
-    name: 'slack-token',
-    pattern: /xox[baprs]-[0-9A-Za-z-]{10,}/g,
-    message: 'Slack token detected',
+    name: 'private-key',
+    pattern: /-----BEGIN\s+(?:RSA|DSA|EC|OPENSSH|PRIVATE)\s+PRIVATE\s+KEY-----/gi,
+    message: 'Private key detected',
+  },
+  {
+    name: 'jwt-token',
+    pattern: /eyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g,
+    message: 'Potential JWT token detected',
+  },
+  {
+    name: 'slack-webhook',
+    pattern: /https:\/\/hooks\.slack\.com\/services\/T[A-Za-z0-9]+\/B[A-Za-z0-9]+\/[A-Za-z0-9]+/g,
+    message: 'Slack webhook URL detected',
   },
   {
     name: 'stripe-key',
-    pattern: /(?:sk|pk)_(?:test|live)_[0-9a-zA-Z]{24,}/g,
-    message: 'Stripe API key detected',
+    pattern: /sk_live_[A-Za-z0-9]{24,}/g,
+    message: 'Stripe live secret key detected',
   },
   {
     name: 'google-api-key',
-    pattern: /AIza[0-9A-Za-z_-]{35}/g,
+    pattern: /AIza[A-Za-z0-9_\\-]{35}/g,
     message: 'Google API key detected',
   },
   {
+    name: 'heroku-api-key',
+    pattern: /heroku[_-]?api[_-]?key['"]?\s*[:=]\s*['"][A-Fa-f0-9-]{36}['"]/gi,
+    message: 'Heroku API key detected',
+  },
+  {
     name: 'twilio-key',
-    pattern: /SK[0-9a-fA-F]{32}/g,
+    pattern: /SK[A-Fa-f0-9]{32}/g,
     message: 'Twilio API key detected',
   },
   {
@@ -64,38 +80,14 @@ const SECRET_PATTERNS: SensitivePattern[] = [
     message: 'SendGrid API key detected',
   },
   {
-    name: 'mailchimp-key',
-    pattern: /[0-9a-f]{32}-us[0-9]{1,2}/g,
-    message: 'Mailchimp API key detected',
-  },
-  // Private Keys
-  {
-    name: 'private-key',
-    pattern: /-----BEGIN (?:RSA |EC |DSA |OPENSSH )?PRIVATE KEY-----/g,
-    message: 'Private key detected',
-  },
-  // Database URLs
-  {
     name: 'database-url',
-    pattern: /(?:mongodb|postgres|mysql|redis):\/\/[^\s"']+:[^\s"'@]+@/gi,
+    pattern: /(?:postgres|mysql|mongodb|redis):\/\/[^:]+:[^@]+@/gi,
     message: 'Database connection string with credentials detected',
   },
-  // Generic secrets
   {
-    name: 'jwt-token',
-    pattern: /eyJ[A-Za-z0-9_-]*\.eyJ[A-Za-z0-9_-]*\.[A-Za-z0-9_-]*/g,
-    message: 'JWT token detected',
-  },
-  {
-    name: 'generic-secret',
-    pattern: /(?:secret|password|passwd|pwd|token|auth|apikey|api_key)["']?\s*[:=]\s*["'][A-Za-z0-9+/=_-]{16,}["']/gi,
-    message: 'Potential secret or credential detected',
-  },
-  // Email addresses (for PII detection)
-  {
-    name: 'email-hardcoded',
-    pattern: /["'][a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}["']/g,
-    message: 'Hardcoded email address detected',
+    name: 'password-assignment',
+    pattern: /(?:password|passwd|pwd|secret)['"]*\s*[:=]\s*['"][^'"]{8,}['"]/gi,
+    message: 'Potential hardcoded password detected',
   },
 ];
 
@@ -103,9 +95,6 @@ const SECRET_PATTERNS: SensitivePattern[] = [
  * Analyzer for detecting secrets and sensitive data
  */
 export class SecretsAnalyzer extends BaseAnalyzer {
-  readonly name = 'secrets';
-  readonly description = 'Detects hardcoded secrets and sensitive data';
-
   private patterns: SensitivePattern[];
   private skipFiles: RegExp[];
 
@@ -113,7 +102,12 @@ export class SecretsAnalyzer extends BaseAnalyzer {
     customPatterns?: SensitivePattern[];
     skipFiles?: RegExp[];
   }) {
-    super();
+    super(
+      'secrets',
+      'Detects hardcoded secrets and sensitive data',
+      'security',
+      'critical'
+    );
     this.patterns = options?.customPatterns || SECRET_PATTERNS;
     this.skipFiles = options?.skipFiles || [
       /\.test\./,
@@ -126,22 +120,24 @@ export class SecretsAnalyzer extends BaseAnalyzer {
     ];
   }
 
-  async analyze(code: string, context: AnalyzerContext): Promise<Finding[]> {
+  async analyze(input: ValidationInput, context: AnalyzerContext): Promise<AnalyzerResult> {
+    const filename = input.filename || '';
+    
     // Skip test files and examples
-    if (this.shouldSkip(context.filePath)) {
-      return [];
+    if (this.shouldSkip(filename)) {
+      return { findings: [] };
     }
 
     const findings: Finding[] = [];
-    const lines = code.split('\n');
+    const lines = input.content.split('\n');
 
     for (const pattern of this.patterns) {
       pattern.pattern.lastIndex = 0;
 
       let match: RegExpExecArray | null;
-      while ((match = pattern.pattern.exec(code)) !== null) {
+      while ((match = pattern.pattern.exec(input.content)) !== null) {
         // Find line number
-        const beforeMatch = code.substring(0, match.index);
+        const beforeMatch = input.content.substring(0, match.index);
         const lineNumber = beforeMatch.split('\n').length;
         const line = lines[lineNumber - 1] || '';
 
@@ -157,29 +153,30 @@ export class SecretsAnalyzer extends BaseAnalyzer {
         // Redact the actual secret in the output
         const redactedMatch = this.redact(match[0]);
 
-        findings.push({
-          id: crypto.randomUUID(),
-          type: 'security',
-          severity: 'critical',
-          message: pattern.message,
-          file: context.filePath,
-          line: lineNumber,
-          column,
-          code: this.redactLine(line.trim()),
-          suggestion: 'Remove this secret and use environment variables or a secure secrets manager',
-          rule: `secret-${pattern.name}`,
-          metadata: {
-            secretType: pattern.name,
-            redactedValue: redactedMatch,
-          },
-        });
+        findings.push(this.createFinding(
+          `secret-${pattern.name}`,
+          pattern.message,
+          {
+            severity: 'critical',
+            file: filename,
+            line: lineNumber,
+            column,
+            code: this.redactLine(line.trim()),
+            suggestion: 'Remove this secret and use environment variables or a secure secrets manager',
+            type: 'security',
+            metadata: {
+              secretType: pattern.name,
+              redactedValue: redactedMatch,
+            },
+          }
+        ));
 
         // Prevent infinite loops
         if (!pattern.pattern.global) break;
       }
     }
 
-    return findings;
+    return { findings };
   }
 
   private shouldSkip(filePath: string): boolean {
@@ -198,24 +195,20 @@ export class SecretsAnalyzer extends BaseAnalyzer {
       /test/i,
       /<.*>/,
       /\$\{.*\}/,
-      /\{\{.*\}\}/,
     ];
 
     return placeholders.some(p => p.test(value));
   }
 
-  private redact(value: string): string {
-    if (value.length <= 8) {
-      return '*'.repeat(value.length);
-    }
-    return value.substring(0, 4) + '****' + value.substring(value.length - 4);
+  private redact(secret: string): string {
+    if (secret.length <= 8) return '***';
+    return secret.substring(0, 4) + '...' + secret.substring(secret.length - 4);
   }
 
   private redactLine(line: string): string {
-    // Redact anything that looks like a secret value
-    return line.replace(
-      /(?<=[:=]\s*["'])[A-Za-z0-9+/=_-]{16,}(?=["'])/g,
-      (match) => this.redact(match)
-    );
+    // Redact common secret patterns in the line
+    return line
+      .replace(/(['"])[A-Za-z0-9_\-\/+=]{20,}(['"])/g, '$1***REDACTED***$2')
+      .replace(/:[^:]+@/g, ':***@');
   }
 }
