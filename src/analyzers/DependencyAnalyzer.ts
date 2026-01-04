@@ -79,7 +79,7 @@ export class DependencyAnalyzer extends BaseAnalyzer {
               },
             }
           ));
-        }
+}
       }
     } catch {
       // Not valid JSON, skip
