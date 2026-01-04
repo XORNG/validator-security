@@ -1,4 +1,9 @@
-{
+Ensure package.json includes:
+"dependencies": {
+  "@xorng/template-base": "^1.0.0",
+  "@xorng/template-validator": "^1.0.0"
+}
+(Adjust versions as needed based on project requirements)
   "name": "@xorng/validator-security",
   "version": "0.1.0",
   "description": "XORNG Security validation sub-agent",

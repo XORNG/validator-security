@@ -57,17 +57,12 @@ export class DependencyAnalyzer extends BaseAnalyzer {
         const vuln = KNOWN_VULNERABILITIES[name];
         if (!vuln) continue;
 
-        // Simple version comparison (in production, use semver)
-        const version = this.parseVersion(versionRange as string);
-        const minSafe = this.parseVersion(vuln.minSafe);
-
-        if (this.isVulnerable(version, minSafe)) {
-          findings.push(this.createFinding(
-            'vulnerable-dependency',
-            `Vulnerable dependency: ${name}@${version}`,
-            {
-              severity: vuln.severity,
-              file: filename,
+class DependencyAnalyzer {
+  // Existing properties and methods...
+  createFinding(severity: string, description: string, location: string): any {
+    return { severity, description, location, timestamp: new Date().toISOString() };
+  }
+}
               line: this.findLineNumber(input.content, name),
               suggestion: `Update ${name} to version ${vuln.minSafe} or higher: ${vuln.vuln}`,
               type: 'security',
