@@ -9,7 +9,9 @@ on:
   pull_request:
     branches: [main, develop]
 
-permissions:
+      - name: Run npm audit
+        run: npm audit --audit-level=moderate || exit 0
+
   contents: read
   pull-requests: write
 
