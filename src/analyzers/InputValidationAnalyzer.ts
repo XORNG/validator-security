@@ -123,13 +123,14 @@ export class InputValidationAnalyzer extends BaseAnalyzer {
 
         const lastNewline = beforeMatch.lastIndexOf('\n');
         const column = match.index - (lastNewline + 1);
-
-        findings.push(this.createFinding(
-          pattern.name,
-          pattern.message,
-          {
-            severity,
-            file: filename,
+  private createFinding(type: string, message: string, location: any): Finding {
+    return {
+      type,
+      message,
+      location,
+      severity: 'medium'
+    };
+  }
             line: lineNumber,
             column,
             code: line.trim(),

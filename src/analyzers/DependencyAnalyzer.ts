@@ -61,13 +61,14 @@ export class DependencyAnalyzer extends BaseAnalyzer {
         const version = this.parseVersion(versionRange as string);
         const minSafe = this.parseVersion(vuln.minSafe);
 
-        if (this.isVulnerable(version, minSafe)) {
-          findings.push(this.createFinding(
-            'vulnerable-dependency',
-            `Vulnerable dependency: ${name}@${version}`,
-            {
-              severity: vuln.severity,
-              file: filename,
+  private createFinding(type: string, message: string, location: any): Finding {
+    return {
+      type,
+      message,
+      location,
+      severity: 'medium'
+    };
+  }
               line: this.findLineNumber(input.content, name),
               suggestion: `Update ${name} to version ${vuln.minSafe} or higher: ${vuln.vuln}`,
               type: 'security',

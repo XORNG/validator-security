@@ -152,13 +152,14 @@ export class SecretsAnalyzer extends BaseAnalyzer {
 
         // Redact the actual secret in the output
         const redactedMatch = this.redact(match[0]);
-
-        findings.push(this.createFinding(
-          `secret-${pattern.name}`,
-          pattern.message,
-          {
-            severity: 'critical',
-            file: filename,
+  private createFinding(type: string, message: string, location: any): Finding {
+    return {
+      type,
+      message,
+      location,
+      severity: 'high'
+    };
+  }
             line: lineNumber,
             column,
             code: this.redactLine(line.trim()),
