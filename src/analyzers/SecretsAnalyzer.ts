@@ -153,7 +153,14 @@ export class SecretsAnalyzer extends BaseAnalyzer {
         // Redact the actual secret in the output
         const redactedMatch = this.redact(match[0]);
 
-        findings.push(this.createFinding(
+  createFinding(data: any) {
+    return {
+      id: Math.random().toString(36).substring(7),
+      ...data,
+      createdAt: new Date().toISOString(),
+      severity: data.severity || 'high'
+    };
+  }
           `secret-${pattern.name}`,
           pattern.message,
           {

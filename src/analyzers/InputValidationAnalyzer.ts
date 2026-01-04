@@ -124,7 +124,14 @@ export class InputValidationAnalyzer extends BaseAnalyzer {
         const lastNewline = beforeMatch.lastIndexOf('\n');
         const column = match.index - (lastNewline + 1);
 
-        findings.push(this.createFinding(
+  createFinding(data: any) {
+    return {
+      id: Math.random().toString(36).substring(7),
+      ...data,
+      createdAt: new Date().toISOString(),
+      severity: data.severity || 'medium'
+    };
+  }
           pattern.name,
           pattern.message,
           {
