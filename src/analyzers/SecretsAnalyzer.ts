@@ -147,17 +147,12 @@ export class SecretsAnalyzer extends BaseAnalyzer {
         }
 
         // Find column
-        const lastNewline = beforeMatch.lastIndexOf('\n');
-        const column = match.index - (lastNewline + 1);
-
-        // Redact the actual secret in the output
-        const redactedMatch = this.redact(match[0]);
-
-        findings.push(this.createFinding(
-          `secret-${pattern.name}`,
-          pattern.message,
-          {
-            severity: 'critical',
+class SecretsAnalyzer {
+  // Existing properties and methods...
+  createFinding(severity: string, description: string, location: string): any {
+    return { severity, description, location, timestamp: new Date().toISOString() };
+  }
+}
             file: filename,
             line: lineNumber,
             column,

@@ -117,17 +117,12 @@ export class InputValidationAnalyzer extends BaseAnalyzer {
         const line = lines[lineNumber - 1] || '';
 
         // Skip if line has validation-related code
-        if (this.lineHasValidation(line)) {
-          continue;
-        }
-
-        const lastNewline = beforeMatch.lastIndexOf('\n');
-        const column = match.index - (lastNewline + 1);
-
-        findings.push(this.createFinding(
-          pattern.name,
-          pattern.message,
-          {
+class InputValidationAnalyzer {
+  // Existing properties and methods...
+  createFinding(severity: string, description: string, location: string): any {
+    return { severity, description, location, timestamp: new Date().toISOString() };
+  }
+}
             severity,
             file: filename,
             line: lineNumber,
