@@ -21,20 +21,22 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
+      - name: Checkout this repository
         uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
         with:
-          node-version: '20'
-          cache: 'npm'
+          path: validator-security
 
-      - name: Install dependencies
-        run: npm ci
+      - name: Checkout template-base
+        uses: actions/checkout@v4
+        with:
+          repository: XORNG/template-base
+          path: template-base
 
-      - name: Build TypeScript
-        run: npm run build
+      - name: Checkout template-validator
+        uses: actions/checkout@v4
+        with:
+          repository: XORNG/template-validator
+          path: template-validator
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -60,6 +62,7 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: .
+          file: ./validator-security/Dockerfile
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
