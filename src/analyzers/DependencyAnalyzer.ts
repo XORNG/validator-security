@@ -62,7 +62,14 @@ export class DependencyAnalyzer extends BaseAnalyzer {
         const minSafe = this.parseVersion(vuln.minSafe);
 
         if (this.isVulnerable(version, minSafe)) {
-          findings.push(this.createFinding(
+  createFinding(data: any) {
+    return {
+      id: Math.random().toString(36).substring(7),
+      ...data,
+      createdAt: new Date().toISOString(),
+      severity: data.severity || 'medium'
+    };
+  }
             'vulnerable-dependency',
             `Vulnerable dependency: ${name}@${version}`,
             {
