@@ -1,4 +1,4 @@
-{
+npm install @xorng/template-base @xorng/template-validator --save
   "name": "@xorng/validator-security",
   "version": "0.1.0",
   "description": "XORNG Security validation sub-agent",
